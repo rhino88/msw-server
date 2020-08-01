@@ -50,8 +50,8 @@ export function getGraphQLEndpoints(
   options?: GraphQLRequestHandlerOptions
 ): RequestHandlersList {
   const schema = makeExecutableSchema({ typeDefs: options?.schema as string });
-  const schemaWithMocks = addMocksToSchema({schema, mocks: options?.mocks, preserveResolvers: true});
-  const server = mockServer(schemaWithMocks, options?.mocks, true);
+  // const schemaWithMocks = addMocksToSchema({schema, mocks: options?.mocks, preserveResolvers: true});
+  const server = mockServer(schema, options?.mocks, false);
   // return schemaWithMocks.getQueryType()?.astNode?.fields?.map(field => {
   //   return mswGraphql.query(field.name, async (req, res, ctx) => {
   //     const results = await = server.query(req.body?.query)
