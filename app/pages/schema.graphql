@@ -1,0 +1,16 @@
+schema {
+  query: Query
+  mutation: mutation
+}
+
+type Query {
+    getTodos: [Todo]
+}
+
+type Mutation {
+    createTodo(text: String!): Todo
+}
+
+type Todo {
+    text: String!
+}

@@ -1,34 +1,64 @@
 import Head from "next/head";
 import { useState, useRef } from "react";
 import { useQuery, queryCache, useMutation } from "react-query";
+import { request } from "graphql-request";
 
 const ENTER_KEY = 13;
 if (process.env.NODE_ENV === "development" && typeof window !== "undefined") {
   const { setupWorker } = require("../../dist/browser");
-  const worker = setupWorker({rest: {
-    todos: [
-      { id: 1, text: "foo" },
-      { id: 2, text: "bar" },
-    ],
-  }});
+  const worker = setupWorker({
+    graphql: {
+      schema: `
+        type Query {
+            getTodos: [Todo]
+        }
+        
+        type Mutation {
+            createTodo(text: String!): Todo
+        }
+        
+        type Todo {
+            text: String!
+        }`,
+      mocks: {
+        createTodo: (arg1, arg2) => {
+          console.log({ arg1, arg2 });
+          return {
+            text: "new todo",
+          };
+        },
+      },
+      preserveResolvers: true,
+    },
+  });
   worker.start();
 }
 
-const fetchTodos = async () => {
-  const results = await fetch("/todos");
-  const todos = await results.json();
+const getTodosQuery = /*GraphQL*/ `
+    query getTodos {
+        getTodos {
+          text
+        }
+    }
+`;
 
-  return todos;
+const fetchTodos = async () => {
+  const results = await request(`/graphql`, getTodosQuery);
+  return results;
 };
 
-const addTodoMutation = async (text) => {
-  const results = await fetch("/todos", {
-    method: "POST",
-    body: JSON.stringify({ text }),
-  });
-  const todos = await results.json();
+const createTodosMutation = /*GraphQL*/ `
+  mutation createTodo($text: String!) {
+    createTodo(text: $text) {
+      text
+    }
+  }
+`;
 
-  return todos;
+const addTodoMutation = async (text) => {
+  const results = await request(`/graphql`, createTodosMutation, { text });
+
+  return results;
 };
 
 const updateTodoMutation = async ({ text, id }) => {
@@ -65,7 +95,8 @@ export default function Home() {
     onSuccess: invalidateTodos,
   });
 
-  const { data: todos, status } = useQuery("todos", fetchTodos);
+  const { data, status } = useQuery("todos", fetchTodos);
+  const todos = data ? data.getTodos : [];
   const textbox = useRef(null);
 
   if (status === "loading") {

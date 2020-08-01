@@ -1,13 +1,17 @@
 import lodashId from "lodash-id";
 import mixins from "json-server/lib/server/mixins";
 import { RequestHandlersList } from "msw/lib/types/setupWorker/glossary";
-import { rest, graphql as mswGraphql } from "msw";
+import { rest, graphql as mswGraphql, GraphQLRequestPayload } from "msw";
 import low from "lowdb";
 import _ from "lodash";
 import { makeExecutableSchema } from "@graphql-tools/schema";
-import { jsonToSchema } from "@walmartlabs/json-to-simple-graphql-schema/lib";
+import {
+  mockServer,
+  addMocksToSchema,
+  IMocks,
+} from "@graphql-tools/mock";
 import Memory from "lowdb/adapters/Memory";
-import { graphql } from "graphql";
+import {MswServerConfig, GraphQLRequestHandlerOptions} from './types';
 
 // declare const hammerhead: number;
 declare global {
@@ -23,23 +27,64 @@ declare global {
 }
 function withUrl(url: string) {
   if (process.env.NEXT_PUBLIC_IS_TESTCAFE) {
+    //@ts-ignore
     const getProxyUrl = window["%hammerhead%"].utils.url.getProxyUrl;
 
     return getProxyUrl(url);
   }
   return url;
 }
-export function getEndpointsFor(data: object): RequestHandlersList {
+
+export function jsonParse<T extends Record<string, any>>(
+  str: string,
+): T | undefined {
+  try {
+    return JSON.parse(str)
+  } catch (error) {
+    return undefined
+  }
+}
+
+
+export function getGraphQLEndpoints(
+  options?: GraphQLRequestHandlerOptions
+): RequestHandlersList {
+  const schema = makeExecutableSchema({ typeDefs: options?.schema as string });
+  const schemaWithMocks = addMocksToSchema({schema, mocks: options?.mocks, preserveResolvers: true});
+  const server = mockServer(schemaWithMocks, options?.mocks, true);
+  // return schemaWithMocks.getQueryType()?.astNode?.fields?.map(field => {
+  //   return mswGraphql.query(field.name, async (req, res, ctx) => {
+  //     const results = await = server.query(req.body?.query)
+  //     return res(ctx.data({ [field.name]: [results]}));
+  //   }))
+  // });
+
+  return [
+    // @ts-ignore
+    mswGraphql.query("getTodos", async (req, res, ctx) => {
+      //@ts-ignore
+      const result = await server.query(req?.body?.query, req?.variables);
+      return res(
+        ctx.data(result.data)
+      );
+    }),
+    //@ts-ignore
+    mswGraphql.mutation("createTodo", async (req, res, ctx) => {
+      //@ts-ignore
+      const result = await server.query(req?.body?.query, req?.variables);
+      console.log(result);
+      return res(
+        ctx.data(result.data)
+      );
+    }),
+  ];
+}
+
+export function getRestEndpoints(data: object): RequestHandlersList {
   const db = low(new Memory()).setState(JSON.parse(JSON.stringify(data)));
   db._.mixin(lodashId);
   db._.mixin(mixins);
 
-  const schemaString = jsonToSchema({
-    baseType: "Query",
-    jsonInput: JSON.stringify(data),
-  });
-
-  const schema = makeExecutableSchema({ typeDefs: schemaString.value });
   const handlers: RequestHandlersList = [];
   _.forEach(data, (value: any, key: string) => {
     handlers.push(
@@ -89,34 +134,20 @@ export function getEndpointsFor(data: object): RequestHandlersList {
         return res(ctx.json({}));
       })
     );
-    handlers.push(
-      //@ts-ignore https://github.com/mswjs/msw/issues/296
-      mswGraphql.query(`Get${_.startCase(key)}`, async (req, res, ctx) => {
-        // console.log
-
-        //@ts-ignore https://github.com/mswjs/msw/issues/297
-        const result = await graphql(schema, req.body?.query, db.getState());
-
-        return res(ctx.data(result.data));
-      })
-    );
-
-    handlers.push(
-      mswGraphql.mutation(_.startCase(key), (req, res, ctx) => {
-        db.set(key, req.variables).write();
-        console.log({ key }, req.variables);
-        const results = db.get(key).value();
-        console.log(results);
-        return res(ctx.data({ [key]: [results] }));
-      })
-    );
   });
 
-  // handlers.push(
-  //   // @ts-ignore
-  //   rest.get("*", (req,res,ctx) => {}),
-  //   // @ts-ignore
-  //   rest.post("*", (req,res,ctx) => {})
-  // )
+  return handlers;
+}
+
+export function getEndpointsFor({rest: data, graphql}: MswServerConfig): RequestHandlersList {
+  const handlers: RequestHandlersList = [];
+  if (data) {
+    handlers.push(...getRestEndpoints(data))
+  }
+
+  if (graphql) {
+    handlers.push(...getGraphQLEndpoints(graphql));
+  }
+
   return handlers;
 }
