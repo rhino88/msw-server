@@ -72,7 +72,6 @@ export function getGraphQLEndpoints(
     mswGraphql.mutation("createTodo", async (req, res, ctx) => {
       //@ts-ignore
       const result = await server.query(req?.body?.query, req?.variables);
-      console.log(result);
       return res(
         ctx.data(result.data)
       );

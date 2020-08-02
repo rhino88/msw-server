@@ -2,6 +2,7 @@ import Head from "next/head";
 import { useState, useRef } from "react";
 import { useQuery, queryCache, useMutation } from "react-query";
 import { request } from "graphql-request";
+import casual from 'casual-browserify';
 
 const ENTER_KEY = 13;
 if (process.env.NODE_ENV === "development" && typeof window !== "undefined") {
@@ -19,14 +20,17 @@ if (process.env.NODE_ENV === "development" && typeof window !== "undefined") {
         
         type Todo {
             text: String!
-        }`,
+        }
+        
+        schema {
+          query: Query
+          mutation: Mutation
+        }
+        `,
       mocks: {
-        createTodo: (arg1, arg2) => {
-          console.log({ arg1, arg2 });
-          return {
-            text: "new todo",
-          };
-        },
+        Int: () => casual.integer(0, 100),
+        Float: () => casual.double(0, 100),
+        String: () => casual.words(3),
       },
       preserveResolvers: true,
     },

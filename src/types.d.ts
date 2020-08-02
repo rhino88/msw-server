@@ -5,7 +5,7 @@ interface MswServerConfig {
 
 export interface GraphQLRequestHandlerOptions {
     /**
-    * The schema to which to add mocks. This can also be a set of type definitions instead.
+    * The GraphQL schema as a string.
     */
     schema?: String;
     /**
